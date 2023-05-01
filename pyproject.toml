@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "osync_conf_render"
+version = "0.1.0"
+description = ""
+authors = ["J. Poessl <j@poessl.dev>"]
+readme = "README.md"
+packages = [{include = "osync_conf_render"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+jinja2 = "^3.1.2"
+ruamel-yaml = "^0.17.21"
+deepmerge = "^1.1.0"
+
+
+[tool.poetry.group.dev.dependencies]
+black = "^23.3.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

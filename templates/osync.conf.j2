@@ -1,0 +1,235 @@
+###### osync - Rsync based two way sync engine with fault tolerance
+###### (C) 2013-2023 by Orsiris de Jong (www.netpower.fr)
+
+[GENERAL]
+CONFIG_FILE_REVISION=1.3.0
+
+## Sync job identification
+INSTANCE_ID="{{id}}"
+
+## Directories to synchronize.
+## Initiator is the system osync runs on. The initiator directory must be a local path.
+INITIATOR_SYNC_DIR="{{args.sync.src}}"
+
+## Target is the system osync synchronizes to (can be the same system as the initiator in case of local sync tasks). The target directory can be a local or remote path.
+TARGET_SYNC_DIR="{{args.sync.dst}}"
+
+
+{% if args.ssh.private_rsa_key is not none %}
+## If the target system is remote, you can specify a RSA key (please use full path). If not defined, the default ~/.ssh/id_rsa will be used. See documentation for further information.
+SSH_PRIVATE_RSA_KEY="{{args.ssh.private_rsa_key}}"
+{% endif %}
+
+{% if args.ssh.password_file is not none %}
+## Alternatively, you may specify an SSH password file (less secure). Needs sshpass utility installed.
+SSH_PASSWORD_FILE="{{args.ssh.password_file}}"
+{% endif %}
+
+{% if args.ssh.remote_token is not none %}
+## When using ssh filter, you must specify a remote token matching the one setup in authorized_keys
+_REMOTE_TOKEN="{{args.ssh.remote_token}}"
+{% endif %}
+
+## Create sync directories if they do not exist (true/false)
+CREATE_DIRS=true
+
+## Log file location. Leaving this empty will create a logfile at /var/log/osync_version_SYNC_ID.log (or current directory if /var/log doesn't exist)
+LOGFILE="{{args.logs.file}}"
+
+## Generate an alert if initiator or target replicas have less free space than given value in KB. Set this to zero to skip disk space tests. 
+MINIMUM_SPACE={{args.alerts.minimum_space}}
+
+## Bandwidth limit Kbytes / second. Leave 0 to disable limitation
+BANDWIDTH={{args.limits.bandwidth}}
+
+## If enabled, synchronization on remote system will be processed as superuser. See documentation for /etc/sudoers file configuration.
+SUDO_EXEC={{args.rsync.sudo}}
+## Paranoia option. Don't change this unless you read the documentation.
+RSYNC_EXECUTABLE="{{args.rsync.exec.local}}"
+## Remote rsync executable path. Leave this empty in most cases
+RSYNC_REMOTE_PATH="{{args.rsync.exec.remote}}"
+
+## Rsync exclude / include order (the option set here will be set first, eg: include will make include then exclude patterns)
+RSYNC_PATTERN_FIRST="{{args.filters.first}}"
+
+## List of files / directories to include / exclude from sync on both sides (see rsync patterns, wildcards work).
+## Paths are relative to sync dirs. List elements are separated by a semicolon.
+RSYNC_INCLUDE_PATTERN="{{args.filters.include.pattern|join(';')}}"
+RSYNC_EXCLUDE_PATTERN="{{args.filters.exclude.pattern|join(';')}}"
+
+## Files that contains lists of files / directories to include / exclude from sync on both sides. Leave this empty if you don't want to use an exclusion file.
+## This file has to be in the same directory as the config file
+## Paths are relative to sync dirs. One element per line.
+RSYNC_INCLUDE_FROM="{{args.filters.include_from_agg}}"
+RSYNC_EXCLUDE_FROM="{{args.filters.exclude.from_agg}}"
+
+## List elements separator char.  You may set an alternative separator char for your directories lists above.
+PATH_SEPARATOR_CHAR=";"
+
+## By default, osync stores its state into the replica_path/.osync_workdir/state
+## This behavior can be changed for initiator or slave by overriding the following with an absolute path to a statedir, ex /opt/osync_state/initiator
+## If osync runs locally, initiator and target state dirs **must** be different
+INITIATOR_CUSTOM_STATE_DIR="{{args.sync.state_dir.src}}"
+TARGET_CUSTOM_STATE_DIR="{{args.sync.state_dir.dst}}"
+
+[REMOTE_OPTIONS]
+
+## ssh compression should be used on WAN links, unless your remote connection is good enough (LAN), in which case it would slow down things
+SSH_COMPRESSION={{args.ssh.compression}}
+
+{% if args.ssh.args is not none %}
+## Optional ssh options. Example to lower CPU usage on ssh compression, one can specify '-T -c arcfour -o Compression=no -x'
+## -T = turn off pseudo-tty, -c arcfour = weakest but fasted ssh encryption (destination must accept "Ciphers arcfour" in sshd_config), -x turns off X11 forwarding
+## arcfour isn't accepted on most newer systems, you may then prefer any AES encryption if processor has aes-ni hardware acceleration
+## If the system does not provide hardware assisted acceleration, chacha20-poly1305@openssh.com is a good cipher to select
+## See: https://wiki.csnu.org/index.php/SSH_ciphers_speed_comparison
+## -o Compression=no is already handled by SSH_COMPRESSION option
+## Uncomment the following line to use those optimizations, on secured links only
+SSH_OPTIONAL_ARGS="{{args.ssh.args}}"
+{% endif %}
+
+## Ignore ssh known hosts. DANGER WILL ROBINSON DANGER ! This can lead to security issues. Only enable this if you know what you're doing.
+SSH_IGNORE_KNOWN_HOSTS={{args.ssh.ignore_known_hosts}}
+
+## Use a single TCP connection for all SSH calls. Will make remote sync faster, but may work less good on lossy links.
+SSH_CONTROLMASTER={{args.ssh.controlmaster}}
+
+## Check for connectivity to remote host before launching remote sync task. Be sure the hosts responds to ping. Failing to ping will stop sync.
+REMOTE_HOST_PING={{args.ssh.remote_host_ping}}
+
+## Check for internet access by pinging one or more 3rd party hosts before remote sync task. Leave empty if you don't want this check to be be performed. Failing to ping will stop sync.
+## If you use this function, you should set more than one 3rd party host, and be sure you can ping them.
+## Be aware some DNS like opendns redirect false hostnames. Also, this adds an extra execution time of a bit less than a minute.
+REMOTE_3RD_PARTY_HOSTS="{{args.ssh.remote_3rd_party_hosts|join(' ')}}"
+
+[MISC_OPTIONS]
+
+## Optional arguments passed to rsync executable. The following are already managed by the program and shoul never be passed here
+## -r -l -p -t -g -o -D -E - u- i- n --executability -A -X -L -K -H -8 -zz –skip-compress –checksum –bwlimit –partial –partial-dir –no-whole-file –whole-file –backup –backup-dir –suffix
+## --exclude --exclude-from --include --include-from --list-only --stats
+## When dealing with different filesystems for sync, or using SMB mountpoints, try adding --modify-window=2 --omit-dir-times as optional arguments.
+RSYNC_OPTIONAL_ARGS="{{args.rsync.args}}"
+
+## Preserve basic linux permissions
+PRESERVE_PERMISSIONS={{args.sync.preserve.permissions}}
+PRESERVE_OWNER={{args.sync.preserve.owner}}
+PRESERVE_GROUP={{args.sync.preserve.group}}
+## On MACOS X, does not work and will be ignored
+PRESERVE_EXECUTABILITY={{args.sync.preserve.exec}}
+
+## Preserve ACLS. Make sure source and target FS can handle ACL. Disabled on Mac OSX.
+PRESERVE_ACL={{args.sync.preserve.acl}}
+## Preserve Xattr. Make sure source and target FS can manage identical XATTRS. Disabled on Mac OSX. Apparently, prior to rsync v3.1.2 there are some performance caveats with transferring XATTRS.
+PRESERVE_XATTR={{args.sync.preserve.xattr}}
+## Transforms symlinks into referent files/dirs. Be careful as symlinks without referrent will break sync as if standard files could not be copied.
+COPY_SYMLINKS={{args.sync.links.sym}}
+## Treat symlinked dirs	as dirs. CAUTION: This also follows symlinks outside of the replica root.
+KEEP_DIRLINKS={{args.sync.links.dir}}
+## Preserve hard links. Make sure source and target FS can manage hard links or you will lose them.
+PRESERVE_HARDLINKS={{args.sync.links.hard}}
+## Do a full checksum on all files that have identical sizes, they are checksummed to see if they actually are identical. This can take a long time.
+CHECKSUM={{args.sync.checksum}}
+
+## Let RSYNC compress file transfers. Do not use this if both initator and target replicas are on local system. Also, do not use this if you already enabled SSH compression.
+RSYNC_COMPRESS={{args.rsync.compress}}
+
+## Maximum execution time (in seconds) for sync process. Set these values zero will disable max execution times.
+## Soft exec time only generates a warning. Hard exec time will generate a warning and stop sync process.
+SOFT_MAX_EXEC_TIME={{args.limits.time.exec.soft_max}}
+HARD_MAX_EXEC_TIME={{args.limits.time.exec.hard_max}}
+
+## Log a message every KEEP_LOGGING seconds just to know the task is still alive
+KEEP_LOGGING={{args.logs.heartbeat}}
+
+## Minimum time (in seconds) in file monitor /daemon mode between modification detection and sync task in order to let copy operations finish.
+MIN_WAIT={{args.limits.time.daemon.min_wait}}
+
+## Maximum time (in seconds) waiting in file monitor / daemon mode. After this time, sync is run.
+## Use 0 to wait indefinitely.
+MAX_WAIT={{args.limits.time.daemon.max_wait}}
+
+[BACKUP_DELETE_OPTIONS]
+
+## Log a list of conflictual files (EXPERIMENTAL)
+LOG_CONFLICTS={{args.logs.conflicts}}
+## Send an email when conflictual files are found (implies LOG_CONFLICTS)
+ALERT_CONFLICTS={{args.alerts.conflicts}}
+## Enabling this option will keep a backup of a file on the target replica if it gets updated from the source replica. Backups will be made to .osync_workdir/backups
+CONFLICT_BACKUP={{args.backup.enabled}}
+## Keep multiple backup versions of the same file. Warning, This can be very space consuming.
+CONFLICT_BACKUP_MULTIPLE={{args.backup.multiple}}
+## Osync will clean backup files after a given number of days. Setting this to 0 will disable cleaning and keep backups forever. Warning: This can be very space consuming.
+CONFLICT_BACKUP_DAYS={{args.backup.days}}
+## If the same file exists on both replicas, newer version will be synced. However, if both files have the same timestamp but differ, CONFILCT_PREVALANCE sets winner replica.
+CONFLICT_PREVALANCE={{args.backup.prevalence}}
+
+## On deletion propagation to the target replica, a backup of the deleted files can be kept. Deletions will be kept in .osync_workdir/deleted
+SOFT_DELETE={{args.delete.enabled}}
+## Osync will clean deleted files after a given number of days. Setting this to 0 will disable cleaning and keep deleted files forever. Warning: This can be very space consuming.
+SOFT_DELETE_DAYS="{{args.delete.days}}"
+
+## Optional deletion skip on replicas. Valid values are "initiator", "target", or "initiator,target"
+SKIP_DELETION="{{args.delete.skip}}"
+
+## Optional sync type. By default, osync is bidirectional. You may want to use osync as unidirectional sync in some circumstances. Valid values are "initiator2target" or "target2initiator"
+SYNC_TYPE="{{args.sync.type}}"
+
+[RESUME_OPTIONS]
+
+## Try to resume an aborted sync task
+RESUME_SYNC={{args.resume.enabled}}
+## Number maximum resume tries before initiating a fresh sync.
+RESUME_TRY={{args.resume.tries}}
+## When a pidlock exists on slave replica that does not correspond to the initiator's instance-id, force pidlock removal. Be careful with this option if you have multiple initiators.
+FORCE_STRANGER_LOCK_RESUME={{args.resume.force_stranger_lock_remove}}
+
+## Keep partial uploads that can be resumed on next run, experimental feature
+PARTIAL={{args.resume.partial}}
+
+## Use delta copy algorithm (useful when local paths are network drives), defaults to true
+DELTA_COPIES={{args.resume.delta_copies}}
+
+[ALERT_OPTIONS]
+## List of alert mails separated by spaces
+## Most Unix systems (including Win10 bash) have mail support out of the box
+## Just make sure that the current user has enough privileges to use mail / mutt / sendmail and that the mail system is configured to allow outgoing mails
+## on pfSense platform, smtp support needs to be configured in System > Advanced > Notifications
+DESTINATION_MAILS="{{args.alerts.mail.dst|join(' ')}}"
+
+## By default, only sync warnings / errors are sent by mail. This default behavior can be overriden here
+ALWAYS_SEND_MAILS={{args.alerts.mail.always_send}}
+
+## Optional change of mail body encoding (using iconv)
+## By default, all mails are sent in UTF-8 format without header (because of maximum compatibility of all platforms)
+## You may specify an optional encoding here (like "ISO-8859-1" or whatever iconv can handle)
+MAIL_BODY_CHARSET="{{args.alerts.mail.body_charset}}"
+
+## Additional mail parameters needed for Android / Busybox / Cygwin / MSYS
+## Android & Busybox use sendmail (and openssl if encryption is needed)
+## MSYS & Cygwin Windows mail support relies on mailsend.exe from muquit, http://github.com/muquit/mailsend which needs to be in %PATH% environment variable
+SENDER_MAIL="{{args.alerts.mail.src}}"
+SMTP_SERVER="{{args.alerts.mail.smtp.server}}"
+SMTP_PORT={{args.alerts.mail.smtp.port}}
+# encryption can be tls, ssl or none
+SMTP_ENCRYPTION="{{args.alerts.mail.smtp.encryption}}"
+SMTP_USER="{{args.alerts.mail.smtp.user}}"
+SMTP_PASSWORD="{{args.alerts.mail.smtp.password}}"
+
+[EXECUTION_HOOKS]
+
+## Commands can will be run before and / or after sync process
+LOCAL_RUN_BEFORE_CMD="{{args.hooks.local.before|join(' && ')}}"
+LOCAL_RUN_AFTER_CMD="{{args.hooks.local.after|join(' && ')}}"
+
+REMOTE_RUN_BEFORE_CMD="{{args.hooks.remote.before|join(' && ')}}"
+REMOTE_RUN_AFTER_CMD="{{args.hooks.remote.after|join(' && ')}}"
+
+## Max execution time of commands before they get force killed. Leave 0 if you don't want this to happen. Time is specified in seconds.
+MAX_EXEC_TIME_PER_CMD_BEFORE={{args.limits.time.max_exec_time_per_cmd_before}}
+MAX_EXEC_TIME_PER_CMD_AFTER={{args.limits.time.max_exec_time_per_cmd_after}}
+
+## Stops osync execution if one of the above before commands fail
+STOP_ON_CMD_ERROR={{args.hooks.run_osync_on_before_error}}
+
+## Run local and remote after sync commands even on failure
+RUN_AFTER_CMD_ON_ERROR={{args.hooks.run_after_on_osync_or_before_error}}
